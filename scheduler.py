@@ -11,7 +11,7 @@ class CosineAnnealingWithWarmRestartsLR(LRScheduler):
         warmup_steps: int = 128,
         cycle_steps: int = 512,
         min_lr: float = 0.0,
-        max_lr: float = 1e-3,
+        max_lr: float = 1e-5,
     ):
         self.optimizer = optimizer
         self.warmup_steps = warmup_steps

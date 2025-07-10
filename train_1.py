@@ -15,8 +15,9 @@ from torchvision import datasets, transforms
 from tqdm import tqdm
 
 import wandb
-from models import get_model
+from models_1 import get_model
 from scheduler import CosineAnnealingWithWarmRestartsLR
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts, ReduceLROnPlateau
 
 seed = 2001
 torch.manual_seed(seed)
@@ -65,9 +66,8 @@ class Trainer:
 
         self.optimizer = AdamW(model.parameters(), lr=lr)
         self.scaler = torch.amp.GradScaler('cuda', enabled=self.amp)
-        self.scheduler = CosineAnnealingWithWarmRestartsLR(
-            self.optimizer, warmup_steps=128, cycle_steps=1024
-        )
+        self.scheduler_cosine = CosineAnnealingWarmRestarts(self.optimizer, T_0=10, T_mult=2)
+        self.scheduler_plateau = ReduceLROnPlateau(self.optimizer, mode='max', factor=0.5, patience=3, verbose=True)
         self.ema = EMA(model, beta=ema_decay, update_every=ema_update_every).to(
             self.device
         )
@@ -107,6 +107,7 @@ class Trainer:
                     "Train Accuracy": train_accuracy,
                     "Val Accuracy": val_accuracy,
                     "Epoch": epoch + 1,
+                    "Learning Rate": self.optimizer.param_groups[0]["lr"],
                 }
             )
 
@@ -123,6 +124,9 @@ class Trainer:
                         % self.early_stopping_patience
                     )
                     break
+            # 在每个 epoch 末尾执行
+            self.scheduler_cosine.step(epoch + 1)  # 使用周期余弦调整
+            self.scheduler_plateau.step(val_accuracy)  # 如果验证准确率停滞，降低学习率
 
         self.test_model()
         wandb.finish()
@@ -150,7 +154,8 @@ class Trainer:
                 self.optimizer.zero_grad(set_to_none=True)
                 self.scaler.update()
                 self.ema.update()
-                self.scheduler.step()
+                
+
 
             batch_accuracy = (predictions == labels).sum().item() / labels.size(0)
 
@@ -205,7 +210,8 @@ class Trainer:
                     y_true=true_labels,
                     preds=predicted_labels,
                     class_names=self.classes,
-                )
+                ),
+                "Learning Rate": self.optimizer.param_groups[0]["lr"]
             }
         )
 
@@ -283,7 +289,8 @@ class Trainer:
             "opt": self.optimizer.state_dict(),
             "ema": self.ema.state_dict(),
             "scaler": self.scaler.state_dict(),
-            "scheduler": self.scheduler.state_dict(),
+            "scheduler_cosine": self.scheduler_cosine.state_dict(),
+            "scheduler_plateau": self.scheduler_plateau.state_dict(),
             "best_acc": self.best_val_accuracy,
         }
 
@@ -296,7 +303,8 @@ class Trainer:
         self.optimizer.load_state_dict(data["opt"])
         self.ema.load_state_dict(data["ema"])
         self.scaler.load_state_dict(data["scaler"])
-        self.scheduler.load_state_dict(data["scheduler"])
+        self.scheduler_cosine.load_state_dict(data["scheduler_cosine"])
+        self.scheduler_plateau.load_state_dict(data["scheduler_plateau"])
         self.best_val_accuracy = data["best_acc"]
 
 
@@ -377,7 +385,7 @@ if __name__ == "__main__":
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     exec_name = f"EmoNeXt_{opt.model_size}_{current_time}"
 
-    wandb.init(project="EmoNeXt", name=exec_name, anonymous="must", mode = 'offline')
+    wandb.init(project="EmoNeXt", name=exec_name, anonymous="must", mode="offline")
 
     train_transform = transforms.Compose(
         [
