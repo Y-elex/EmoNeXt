@@ -17,6 +17,7 @@ from tqdm import tqdm
 import wandb
 from models import get_model
 from scheduler import CosineAnnealingWithWarmRestartsLR
+import matplotlib.pyplot as plt
 
 seed = 2001
 torch.manual_seed(seed)
@@ -88,6 +89,12 @@ class Trainer:
 
     def run(self):
         counter = 0  # Counter for epochs with no validation loss improvement
+        train_acc_list = []
+        val_acc_list = []
+        train_loss_list = []
+        val_loss_list = []
+        epoch_list = []
+
 
         images, _ = next(iter(self.training_dataloader))
         images = [transforms.ToPILImage()(image) for image in images]
@@ -109,6 +116,38 @@ class Trainer:
                     "Epoch": epoch + 1,
                 }
             )
+            train_acc_list.append(train_accuracy)
+            val_acc_list.append(val_accuracy)
+            train_loss_list.append(train_loss)
+            val_loss_list.append(val_loss)
+            epoch_list.append(epoch)
+
+            plt.figure(figsize=(12, 5))
+
+            # 准确率图
+            plt.subplot(1, 2, 1)
+            plt.plot(epoch_list, train_acc_list, label='Train Accuracy')
+            plt.plot(epoch_list, test_acc_list, label='Test Accuracy')
+            plt.xlabel('Epoch')
+            plt.ylabel('Accuracy (%)')
+            plt.title('Epoch vs Accuracy')
+            plt.legend()
+            plt.grid(True)
+
+            # 损失图
+            plt.subplot(1, 2, 2)
+            plt.plot(epoch_list, train_loss_list, label='Train Loss')
+            plt.plot(epoch_list, test_loss_list, label='Test Loss')
+            plt.xlabel('Epoch')
+            plt.ylabel('Loss')
+            plt.title('Epoch vs Loss')
+            plt.legend()
+            plt.grid(True)
+
+            plt.tight_layout()
+            plt.savefig('results/accuracy_loss_plot.png')
+            plt.show()
+
 
             # Early stopping
             if val_accuracy > self.best_val_accuracy:
