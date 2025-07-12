@@ -7,6 +7,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import pandas as pd
 import torchvision
 from ema_pytorch import EMA
 from torch.optim import AdamW
@@ -120,34 +121,7 @@ class Trainer:
             val_acc_list.append(val_accuracy)
             train_loss_list.append(train_loss)
             val_loss_list.append(val_loss)
-            epoch_list.append(epoch)
-
-            plt.figure(figsize=(12, 5))
-
-            # 准确率图
-            plt.subplot(1, 2, 1)
-            plt.plot(epoch_list, train_acc_list, label='Train Accuracy')
-            plt.plot(epoch_list, test_acc_list, label='Test Accuracy')
-            plt.xlabel('Epoch')
-            plt.ylabel('Accuracy (%)')
-            plt.title('Epoch vs Accuracy')
-            plt.legend()
-            plt.grid(True)
-
-            # 损失图
-            plt.subplot(1, 2, 2)
-            plt.plot(epoch_list, train_loss_list, label='Train Loss')
-            plt.plot(epoch_list, test_loss_list, label='Test Loss')
-            plt.xlabel('Epoch')
-            plt.ylabel('Loss')
-            plt.title('Epoch vs Loss')
-            plt.legend()
-            plt.grid(True)
-
-            plt.tight_layout()
-            plt.savefig('results/accuracy_loss_plot.png')
-            plt.show()
-
+            epoch_list.append(epoch) 
 
             # Early stopping
             if val_accuracy > self.best_val_accuracy:
@@ -162,6 +136,43 @@ class Trainer:
                         % self.early_stopping_patience
                     )
                     break
+        # 创建一个 DataFrame
+        df = pd.DataFrame({
+            'epoch': epoch_list,
+            'train_acc': train_acc_list,
+            'val_acc': val_acc_list,
+            'train_loss': train_loss_list,
+            'val_loss': val_loss_list
+        })
+
+        # 保存为 Excel 文件
+        df.to_excel('training_log.xlsx', index=False)
+
+        plt.figure(figsize=(12, 5))
+
+        # 准确率图
+        plt.subplot(1, 2, 1)
+        plt.plot(epoch_list, train_acc_list, label='Train Accuracy')
+        plt.plot(epoch_list, val_acc_list, label='Val Accuracy')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy (%)')
+        plt.title('Epoch vs Accuracy')
+        plt.legend()
+        plt.grid(True)
+
+        # 损失图
+        plt.subplot(1, 2, 2)
+        plt.plot(epoch_list, train_loss_list, label='Train Loss')
+        plt.plot(epoch_list, val_loss_list, label='Val Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Epoch vs Loss')
+        plt.legend()
+        plt.grid(True)
+
+        plt.tight_layout()
+        plt.savefig('results/accuracy_loss_plot.png')
+        #plt.show()
 
         self.test_model()
         wandb.finish()
@@ -326,7 +337,7 @@ class Trainer:
             "best_acc": self.best_val_accuracy,
         }
 
-        torch.save(data, str(self.output_directory / f"{self.execution_name}.pt"))
+        torch.save(data, str(self.output_directory / "FER-2013.pt"))
 
     def load(self, path):
         data = torch.load(path, map_location=self.device)
