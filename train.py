@@ -28,7 +28,14 @@ np.random.seed(seed)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
+def repeat_channels(x):
+        return x.repeat(3, 1, 1)
 
+def ten_crop_to_tensor(crops):
+    return torch.stack([transforms.ToTensor()(crop) for crop in crops])
+
+def ten_crop_repeat_channels(crops):
+    return torch.stack([crop.repeat(3, 1, 1) for crop in crops])
 class Trainer:
     def __init__(
         self,
@@ -146,7 +153,7 @@ class Trainer:
         })
 
         # 保存为 Excel 文件
-        df.to_excel('training_log.xlsx', index=False)
+        df.to_excel('EmoNeXt_training_log_FERPlus.xlsx', index=False)
 
         plt.figure(figsize=(12, 5))
 
@@ -171,7 +178,7 @@ class Trainer:
         plt.grid(True)
 
         plt.tight_layout()
-        plt.savefig('results/accuracy_loss_plot.png')
+        plt.savefig('results/EmoNeXt_accuracy_loss_plot_FERPlus.png')
         #plt.show()
 
         self.test_model()
@@ -337,7 +344,7 @@ class Trainer:
             "best_acc": self.best_val_accuracy,
         }
 
-        torch.save(data, str(self.output_directory / "FER-2013.pt"))
+        torch.save(data, str(self.output_directory / "FERPlus.pt"))
 
     def load(self, path):
         data = torch.load(path, map_location=self.device)
@@ -428,7 +435,7 @@ if __name__ == "__main__":
     exec_name = f"EmoNeXt_{opt.model_size}_{current_time}"
 
     wandb.init(project="EmoNeXt", name=exec_name, anonymous="must", mode = 'offline')
-
+ 
     train_transform = transforms.Compose(
         [
             transforms.RandomHorizontalFlip(),
@@ -438,7 +445,7 @@ if __name__ == "__main__":
             transforms.RandomRotation(degrees=20),
             transforms.RandomCrop(224),
             transforms.ToTensor(),
-            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+            transforms.Lambda(repeat_channels),
         ]
     )
 
@@ -448,7 +455,7 @@ if __name__ == "__main__":
             transforms.Resize(236),
             transforms.RandomCrop(224),
             transforms.ToTensor(),
-            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+            transforms.Lambda(repeat_channels),
         ]
     )
 
@@ -457,16 +464,10 @@ if __name__ == "__main__":
             transforms.Grayscale(),
             transforms.Resize(236),
             transforms.TenCrop(224),
-            transforms.Lambda(
-                lambda crops: torch.stack(
-                    [transforms.ToTensor()(crop) for crop in crops]
-                )
-            ),
-            transforms.Lambda(
-                lambda crops: torch.stack([crop.repeat(3, 1, 1) for crop in crops])
-            ),
+            transforms.Lambda(ten_crop_to_tensor),
+            transforms.Lambda(ten_crop_repeat_channels),
         ]
-    )
+    ) 
 
     train_dataset = datasets.ImageFolder(opt.dataset_path + "/train", train_transform)
     val_dataset = datasets.ImageFolder(opt.dataset_path + "/val", val_transform)
